@@ -1,0 +1,7 @@
+[
+  { "name": "Alice Johnson", "id": "S001", "answers": ["A","B","C","D","A","B","C","D","A","B"] },
+  { "name": "Bob Smith",     "id": "S002", "answers": ["A","A","C","D","A","A","C","D","B","B"] },
+  { "name": "Carol White",   "id": "S003", "answers": ["B","B","C","D","A","B","C","D","A","B"] },
+  { "name": "David Brown",   "id": "S004", "answers": ["A","B","A","A","B","B","A","D","A","C"] },
+  { "name": "Eve Davis",     "id": "S005", "answers": ["A","B","C","D","A","B","C","D","A","B"] }
+]

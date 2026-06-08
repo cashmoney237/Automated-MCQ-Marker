@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MCQ Grading System</title>
+  <link rel="stylesheet" href="css/style.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">✦</div>
+      <span>GradeAI</span>
+    </div>
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-tab="dashboard">
+        <span class="nav-icon">⊞</span> Dashboard
+      </button>
+      <button class="nav-item" data-tab="create-exam">
+        <span class="nav-icon">✎</span> Create Exam
+      </button>
+      <button class="nav-item" data-tab="grade">
+        <span class="nav-icon">◈</span> Grade Answers
+      </button>
+      <button class="nav-item" data-tab="bulk">
+        <span class="nav-icon">⊕</span> Bulk Grade
+      </button>
+      <button class="nav-item" data-tab="results">
+        <span class="nav-icon">▦</span> Results
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sidebar-tip">💡 Upload CSV, JSON, or TXT answer sheets</div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main" id="main">
+    <!-- Top bar -->
+    <header class="topbar">
+      <button class="menu-btn" id="menuBtn">☰</button>
+      <div class="topbar-title" id="pageTitle">Dashboard</div>
+      <div class="topbar-actions">
+        <div class="status-badge" id="statusBadge">● System Ready</div>
+      </div>
+    </header>
+
+    <!-- Dashboard Tab -->
+    <section class="tab-content active" id="tab-dashboard">
+      <div class="hero-section">
+        <div class="hero-text">
+          <h1>Automated MCQ<br/><span class="accent">Grading System</span></h1>
+          <p>Create exams, upload answer sheets, and get instant grading reports with detailed analytics.</p>
+          <div class="hero-actions">
+            <button class="btn btn-primary" onclick="switchTab('create-exam')">+ Create Exam</button>
+            <button class="btn btn-ghost" onclick="switchTab('grade')">Grade Answers →</button>
+          </div>
+        </div>
+        <div class="hero-visual">
+          <div class="floating-card card-1">
+            <div class="fc-label">Score</div>
+            <div class="fc-value" id="dash-avg">—</div>
+            <div class="fc-sub">Average</div>
+          </div>
+          <div class="floating-card card-2">
+            <div class="fc-label">Graded</div>
+            <div class="fc-value" id="dash-total">0</div>
+            <div class="fc-sub">Students</div>
+          </div>
+          <div class="floating-card card-3">
+            <div class="fc-label">Pass Rate</div>
+            <div class="fc-value" id="dash-pass">—</div>
+            <div class="fc-sub">Overall</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats-row" id="statsRow">
+        <div class="stat-card">
+          <div class="stat-icon">📋</div>
+          <div class="stat-info">
+            <div class="stat-num" id="stat-exams">0</div>
+            <div class="stat-label">Exams Created</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">👥</div>
+          <div class="stat-info">
+            <div class="stat-num" id="stat-students">0</div>
+            <div class="stat-label">Students Graded</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">✅</div>
+          <div class="stat-info">
+            <div class="stat-num" id="stat-passed">0</div>
+            <div class="stat-label">Passed</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">❌</div>
+          <div class="stat-info">
+            <div class="stat-num" id="stat-failed">0</div>
+            <div class="stat-label">Failed</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="recent-section">
+        <h3>Recent Results</h3>
+        <div id="recentResults" class="results-table-wrap">
+          <div class="empty-state">No results yet. Create an exam and grade some answers!</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Create Exam Tab -->
+    <section class="tab-content" id="tab-create-exam">
+      <div class="page-header">
+        <h2>Create New Exam</h2>
+        <p>Set up your exam with title, subject, and correct answers</p>
+      </div>
+
+      <div class="card form-card">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Exam Title *</label>
+            <input type="text" id="examTitle" placeholder="e.g. Biology Midterm 2024" />
+          </div>
+          <div class="form-group">
+            <label>Subject</label>
+            <input type="text" id="examSubject" placeholder="e.g. Biology" />
+          </div>
+          <div class="form-group">
+            <label>Total Marks</label>
+            <input type="number" id="totalMarks" placeholder="Auto (1 per question)" min="1" />
+          </div>
+          <div class="form-group">
+            <label>Pass Mark</label>
+            <input type="number" id="passMark" placeholder="Auto (50% of total)" min="1" />
+          </div>
+          <div class="form-group">
+            <label>Number of Questions *</label>
+            <input type="number" id="numQuestions" placeholder="e.g. 20" min="1" max="200" />
+          </div>
+          <div class="form-group">
+            <label>Time Limit (minutes)</label>
+            <input type="number" id="timeLimit" placeholder="Optional" min="1" />
+          </div>
+        </div>
+
+        <div class="answer-key-section">
+          <div class="ak-header">
+            <h3>Answer Key</h3>
+            <button class="btn btn-sm btn-secondary" id="generateAKBtn">Generate Grid</button>
+          </div>
+          <p class="hint">Select the correct answer for each question (A–E)</p>
+          <div id="answerKeyGrid" class="ak-grid"></div>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-primary btn-lg" id="createExamBtn">Create Exam ✦</button>
+          <button class="btn btn-ghost" onclick="resetCreateForm()">Reset</button>
+        </div>
+        <div id="createExamMsg" class="message"></div>
+      </div>
+    </section>
+
+    <!-- Grade Tab -->
+    <section class="tab-content" id="tab-grade">
+      <div class="page-header">
+        <h2>Grade Answer Sheet</h2>
+        <p>Submit a student's answers manually or upload a file</p>
+      </div>
+
+      <div class="grade-layout">
+        <div class="card form-card">
+          <h3>Student Information</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Select Exam *</label>
+              <select id="gradeExamSelect">
+                <option value="">— Select an exam —</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Student Name *</label>
+              <input type="text" id="gradeStudentName" placeholder="Full name" />
+            </div>
+            <div class="form-group">
+              <label>Student ID</label>
+              <input type="text" id="gradeStudentId" placeholder="Optional" />
+            </div>
+          </div>
+
+          <!-- Tabs for manual vs file -->
+          <div class="input-tabs">
+            <button class="input-tab active" data-input="manual">✎ Manual Entry</button>
+            <button class="input-tab" data-input="file">↑ Upload File</button>
+          </div>
+
+          <div class="input-panel active" id="panel-manual">
+            <p class="hint">Enter answers below. Select correct option per question.</p>
+            <div id="studentAnswerGrid" class="ak-grid"></div>
+          </div>
+
+          <div class="input-panel" id="panel-file">
+            <div class="upload-zone" id="uploadZone">
+              <div class="upload-icon">↑</div>
+              <div class="upload-text">Drop your answer sheet here</div>
+              <div class="upload-sub">Supports CSV, JSON, TXT — max 5MB</div>
+              <input type="file" id="fileInput" accept=".csv,.json,.txt" hidden />
+              <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">Browse File</button>
+            </div>
+            <div id="fileInfo" class="file-info hidden"></div>
+            <div class="format-guide">
+              <strong>File Format Guide:</strong>
+              <div class="format-examples">
+                <div class="format-item">
+                  <span class="format-label">CSV:</span>
+                  <code>1,A<br/>2,B<br/>3,C</code>
+                </div>
+                <div class="format-item">
+                  <span class="format-label">JSON:</span>
+                  <code>["A","B","C"]</code>
+                </div>
+                <div class="format-item">
+                  <span class="format-label">TXT:</span>
+                  <code>A<br/>B<br/>C</code>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-primary btn-lg" id="gradeBtn">Grade Now ◈</button>
+          </div>
+          <div id="gradeMsg" class="message"></div>
+        </div>
+
+        <!-- Result preview -->
+        <div class="result-preview" id="resultPreview" style="display:none">
+          <div class="card result-card">
+            <div class="result-header">
+              <div class="result-grade" id="previewGrade">—</div>
+              <div class="result-info">
+                <div class="result-name" id="previewName">—</div>
+                <div class="result-exam" id="previewExam">—</div>
+              </div>
+              <div class="result-status" id="previewStatus">—</div>
+            </div>
+            <div class="result-metrics">
+              <div class="metric"><div class="metric-val" id="previewScore">—</div><div class="metric-label">Score</div></div>
+              <div class="metric"><div class="metric-val" id="previewPct">—</div><div class="metric-label">Percentage</div></div>
+              <div class="metric"><div class="metric-val correct-text" id="previewCorrect">—</div><div class="metric-label">Correct</div></div>
+              <div class="metric"><div class="metric-val wrong-text" id="previewIncorrect">—</div><div class="metric-label">Incorrect</div></div>
+            </div>
+            <div class="progress-bar-wrap">
+              <div class="progress-bar">
+                <div class="progress-fill" id="previewBar" style="width:0%"></div>
+              </div>
+            </div>
+            <div id="previewBreakdown" class="breakdown-mini"></div>
+            <div class="result-actions">
+              <button class="btn btn-primary" id="downloadPdfBtn">↓ PDF Report</button>
+              <button class="btn btn-secondary" id="downloadJsonBtn">↓ JSON Data</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bulk Grade Tab -->
+    <section class="tab-content" id="tab-bulk">
+      <div class="page-header">
+        <h2>Bulk Grade</h2>
+        <p>Grade multiple students at once by uploading a JSON file</p>
+      </div>
+
+      <div class="card form-card">
+        <div class="form-group">
+          <label>Select Exam *</label>
+          <select id="bulkExamSelect">
+            <option value="">— Select an exam —</option>
+          </select>
+        </div>
+
+        <div class="upload-zone" id="bulkUploadZone">
+          <div class="upload-icon">⊕</div>
+          <div class="upload-text">Upload Students JSON File</div>
+          <div class="upload-sub">JSON array with student name, id, and answers</div>
+          <input type="file" id="bulkFileInput" accept=".json" hidden />
+          <button class="btn btn-secondary" onclick="document.getElementById('bulkFileInput').click()">Browse File</button>
+        </div>
+
+        <div class="format-guide" style="margin-top:1rem">
+          <strong>Expected JSON format:</strong>
+          <pre class="code-block">[
+  { "name": "Alice Smith", "id": "S001", "answers": ["A","B","C","D","A"] },
+  { "name": "Bob Jones",  "id": "S002", "answers": ["A","A","C","D","B"] }
+]</pre>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-primary btn-lg" id="bulkGradeBtn">Bulk Grade ⊕</button>
+        </div>
+        <div id="bulkMsg" class="message"></div>
+      </div>
+
+      <div id="bulkResults" class="bulk-results" style="display:none">
+        <h3>Class Results</h3>
+        <div class="stats-row" id="bulkStatsRow"></div>
+        <div id="bulkTable"></div>
+      </div>
+    </section>
+
+    <!-- Results Tab -->
+    <section class="tab-content" id="tab-results">
+      <div class="page-header">
+        <h2>All Results</h2>
+        <p>View and download all graded results</p>
+      </div>
+      <div class="card">
+        <div class="results-toolbar">
+          <input type="text" id="resultsSearch" placeholder="🔍 Search by student or exam..." class="search-input"/>
+          <button class="btn btn-ghost btn-sm" onclick="loadAllResults()">↻ Refresh</button>
+        </div>
+        <div id="allResultsTable"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
