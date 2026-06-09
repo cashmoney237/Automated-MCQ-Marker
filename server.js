@@ -6,7 +6,7 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// Middleware (order matters)
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -19,13 +19,15 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 // Routes
+const authRoutes = require('./routes/auth');
 const gradingRouter = require('./routes/grading');
 const reportRouter = require('./routes/reports');
 
+app.use('/api/auth', authRoutes.router);
 app.use('/api/grade', gradingRouter);
 app.use('/api/reports', reportRouter);
 
-// Serve index.html for all other routes
+// Serve index.html for all other routes (client-side routing)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });

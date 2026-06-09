@@ -1,26 +1,31 @@
 const express = require('express');
 const router = express.Router();
 const PDFDocument = require('pdfkit');
+const auth = require('../middleware/auth');
 
 // Reference the stores from grading router
 const gradingRouter = require('./grading');
 const resultStore = gradingRouter.resultStore;
 const examStore = gradingRouter.examStore;
 
-// Generate JSON report
-router.get('/json/:resultId', (req, res) => {
+// Generate JSON report (protected)
+router.get('/json/:resultId', auth, (req, res) => {
   const result = resultStore[req.params.resultId];
-  if (!result) return res.status(404).json({ error: 'Result not found' });
+  if (!result || result.userId !== req.user.id) {
+    return res.status(404).json({ error: 'Result not found' });
+  }
 
   res.setHeader('Content-Disposition', `attachment; filename="report-${result.studentName.replace(/\s+/g, '_')}.json"`);
   res.setHeader('Content-Type', 'application/json');
   res.json(result);
 });
 
-// Generate PDF report
-router.get('/pdf/:resultId', (req, res) => {
+// Generate PDF report (protected)
+router.get('/pdf/:resultId', auth, (req, res) => {
   const result = resultStore[req.params.resultId];
-  if (!result) return res.status(404).json({ error: 'Result not found' });
+  if (!result || result.userId !== req.user.id) {
+    return res.status(404).json({ error: 'Result not found' });
+  }
 
   const doc = new PDFDocument({ margin: 50, size: 'A4' });
 
@@ -129,20 +134,22 @@ router.get('/pdf/:resultId', (req, res) => {
   doc.end();
 });
 
-// Get all results summary
-router.get('/all', (req, res) => {
-  const results = Object.entries(resultStore).map(([id, r]) => ({
-    resultId: id,
-    studentName: r.studentName,
-    studentId: r.studentId,
-    examTitle: r.examTitle,
-    score: r.score,
-    totalMarks: r.totalMarks,
-    percentage: r.percentage,
-    grade: r.grade,
-    passed: r.passed,
-    gradedAt: r.gradedAt
-  }));
+// Get all results summary (only user's results)
+router.get('/all', auth, (req, res) => {
+  const results = Object.entries(resultStore)
+    .filter(([_, r]) => r.userId === req.user.id)
+    .map(([id, r]) => ({
+      resultId: id,
+      studentName: r.studentName,
+      studentId: r.studentId,
+      examTitle: r.examTitle,
+      score: r.score,
+      totalMarks: r.totalMarks,
+      percentage: r.percentage,
+      grade: r.grade,
+      passed: r.passed,
+      gradedAt: r.gradedAt
+    }));
   res.json({ results });
 });
 

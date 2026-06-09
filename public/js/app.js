@@ -1,8 +1,12 @@
 /* =========================================
-   MCQ Grading System — Frontend JS
+   MCQ Grading System — Frontend JS with Authentication
    ========================================= */
 
 const API = '';  // Relative URL — same server
+
+// ===== Auth State =====
+let authToken = localStorage.getItem('token');
+let currentUser = null;
 
 // ===== State =====
 let exams = [];
@@ -10,16 +14,134 @@ let currentResultId = null;
 let bulkStudentsData = null;
 let selectedFile = null;
 let currentInputMode = 'manual';
+let allResultsData = [];
+
+// ===== Auth Helpers =====
+async function authFetch(url, options = {}) {
+  const headers = options.headers || {};
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
+  }
+  return fetch(url, { ...options, headers });
+}
+
+function showAuth() {
+  document.getElementById('authOverlay').style.display = 'flex';
+  document.getElementById('appContent').style.display = 'none';
+}
+
+function showApp() {
+  document.getElementById('authOverlay').style.display = 'none';
+  document.getElementById('appContent').style.display = 'block';
+  // Refresh data after login
+  loadExams();
+  loadAllResults();
+  updateDashboard();
+}
+
+async function login(email, password) {
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    authToken = data.token;
+    currentUser = data.user;
+    localStorage.setItem('token', authToken);
+    localStorage.setItem('user', JSON.stringify(currentUser));
+    showApp();
+    return true;
+  } catch (err) {
+    document.getElementById('loginMsg').textContent = err.message;
+    return false;
+  }
+}
+
+async function register(name, email, password) {
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    authToken = data.token;
+    currentUser = data.user;
+    localStorage.setItem('token', authToken);
+    localStorage.setItem('user', JSON.stringify(currentUser));
+    showApp();
+    return true;
+  } catch (err) {
+    document.getElementById('regMsg').textContent = err.message;
+    return false;
+  }
+}
+
+function logout() {
+  authToken = null;
+  currentUser = null;
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  showAuth();
+}
+
+async function checkToken() {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    showAuth();
+    return;
+  }
+  authToken = token;
+  try {
+    const res = await authFetch('/api/auth/me');
+    if (res.ok) {
+      currentUser = await res.json();
+      showApp();
+    } else {
+      throw new Error('Invalid token');
+    }
+  } catch (err) {
+    localStorage.removeItem('token');
+    showAuth();
+  }
+}
 
 // ===== Init =====
 document.addEventListener('DOMContentLoaded', () => {
+  // Auth event listeners
+  document.getElementById('loginForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    login(email, password);
+  });
+  document.getElementById('registerForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = document.getElementById('regName').value;
+    const email = document.getElementById('regEmail').value;
+    const password = document.getElementById('regPassword').value;
+    register(name, email, password);
+  });
+  document.querySelectorAll('.auth-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const type = tab.dataset.auth;
+      document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+      document.getElementById(`${type}Form`).classList.add('active');
+    });
+  });
+  document.getElementById('logoutBtn')?.addEventListener('click', logout);
+
+  // Regular UI setup (will run after auth or immediately if already logged in?)
   setupNav();
   setupInputTabs();
   setupUploadZone();
   setupBulkUpload();
-  loadExams();
-  loadAllResults();
-  updateDashboard();
 
   document.getElementById('numQuestions').addEventListener('input', renderAnswerKeyGrid);
   document.getElementById('generateAKBtn').addEventListener('click', renderAnswerKeyGrid);
@@ -28,9 +150,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('bulkGradeBtn').addEventListener('click', bulkGrade);
   document.getElementById('resultsSearch').addEventListener('input', filterResults);
   document.getElementById('menuBtn').addEventListener('click', toggleSidebar);
+
+  // Check existing token
+  checkToken();
 });
 
-// ===== Navigation =====
+// ===== Navigation (unchanged) =====
 function setupNav() {
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -64,7 +189,7 @@ function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
 }
 
-// ===== Input Tabs =====
+// ===== Input Tabs (unchanged) =====
 function setupInputTabs() {
   document.querySelectorAll('.input-tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -77,7 +202,7 @@ function setupInputTabs() {
   });
 }
 
-// ===== Upload Zone =====
+// ===== Upload Zone (unchanged) =====
 function setupUploadZone() {
   const zone = document.getElementById('uploadZone');
   const input = document.getElementById('fileInput');
@@ -99,7 +224,7 @@ function handleFileSelect(file) {
   info.innerHTML = `📄 <strong>${file.name}</strong> — ${(file.size / 1024).toFixed(1)} KB`;
 }
 
-// ===== Bulk Upload =====
+// ===== Bulk Upload (unchanged) =====
 function setupBulkUpload() {
   const zone = document.getElementById('bulkUploadZone');
   const input = document.getElementById('bulkFileInput');
@@ -129,10 +254,10 @@ function handleBulkFile(file) {
   reader.readAsText(file);
 }
 
-// ===== Load Exams =====
+// ===== Load Exams (with authFetch) =====
 async function loadExams() {
   try {
-    const res = await fetch(`${API}/api/grade/exams`);
+    const res = await authFetch(`${API}/api/grade/exams`);
     const data = await res.json();
     exams = data.exams || [];
     populateExamSelects();
@@ -163,7 +288,7 @@ function populateExamSelects() {
   });
 }
 
-// ===== Answer Key Grid =====
+// ===== Answer Key Grid (unchanged) =====
 function renderAnswerKeyGrid() {
   const n = parseInt(document.getElementById('numQuestions').value) || 0;
   const grid = document.getElementById('answerKeyGrid');
@@ -232,7 +357,7 @@ function getStudentAnswerValues() {
   });
 }
 
-// ===== Create Exam =====
+// ===== Create Exam (with authFetch) =====
 async function createExam() {
   const title = document.getElementById('examTitle').value.trim();
   const subject = document.getElementById('examSubject').value.trim();
@@ -253,7 +378,7 @@ async function createExam() {
   btn.textContent = 'Creating...';
 
   try {
-    const res = await fetch(`${API}/api/grade/create-exam`, {
+    const res = await authFetch(`${API}/api/grade/create-exam`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, subject, totalMarks, passMark, timeLimit, answerKey })
@@ -281,7 +406,7 @@ function resetCreateForm() {
   document.getElementById('createExamMsg').className = 'message';
 }
 
-// ===== Grade Answers =====
+// ===== Grade Answers (with authFetch) =====
 async function gradeAnswers() {
   const examId = document.getElementById('gradeExamSelect').value;
   const studentName = document.getElementById('gradeStudentName').value.trim();
@@ -305,7 +430,7 @@ async function gradeAnswers() {
       formData.append('studentName', studentName);
       formData.append('studentId', studentId);
 
-      const res = await fetch(`${API}/api/grade/upload`, { method: 'POST', body: formData });
+      const res = await authFetch(`${API}/api/grade/upload`, { method: 'POST', body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       result = data.result;
@@ -314,7 +439,7 @@ async function gradeAnswers() {
       const answers = getStudentAnswerValues();
       if (answers.every(a => !a)) return showMsg(msgEl, 'Please enter student answers.', 'error');
 
-      const res = await fetch(`${API}/api/grade/submit`, {
+      const res = await authFetch(`${API}/api/grade/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ examId, studentName, studentId, answers })
@@ -386,12 +511,28 @@ function displayResult(result) {
   document.getElementById('downloadJsonBtn').onclick = () => downloadReport('json');
 }
 
+// Modified downloadReport to work with auth (using blob)
 function downloadReport(type) {
   if (!currentResultId) return;
-  window.open(`${API}/api/reports/${type}/${currentResultId}`, '_blank');
+  authFetch(`${API}/api/reports/${type}/${currentResultId}`)
+    .then(res => {
+      if (!res.ok) throw new Error('Failed to download report');
+      return res.blob();
+    })
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `report.${type === 'pdf' ? 'pdf' : 'json'}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    })
+    .catch(err => showToast(err.message, 'error'));
 }
 
-// ===== Bulk Grade =====
+// ===== Bulk Grade (with authFetch) =====
 async function bulkGrade() {
   const examId = document.getElementById('bulkExamSelect').value;
   const msgEl = document.getElementById('bulkMsg');
@@ -405,7 +546,7 @@ async function bulkGrade() {
   btn.textContent = 'Grading...';
 
   try {
-    const res = await fetch(`${API}/api/grade/bulk-grade`, {
+    const res = await authFetch(`${API}/api/grade/bulk-grade`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ examId, students: bulkStudentsData })
@@ -465,7 +606,7 @@ function displayBulkResults(results, stats) {
             <td><span class="grade-pill grade-${r.grade.replace('+','-plus')}">${r.grade}</span></td>
             <td><span class="${r.passed ? 'pass-badge' : 'fail-badge'}">${r.passed ? 'PASS' : 'FAIL'}</span></td>
             <td>
-              <a href="${API}/api/reports/pdf/${r.resultId}" target="_blank" class="btn btn-sm btn-ghost">PDF</a>
+              <a href="#" class="btn btn-sm btn-ghost" onclick="event.preventDefault(); downloadReportById('${r.resultId}', 'pdf')">PDF</a>
             </td>
           </tr>
         `).join('')}
@@ -474,12 +615,27 @@ function displayBulkResults(results, stats) {
   `;
 }
 
-// ===== All Results =====
-let allResultsData = [];
+// Helper for bulk table downloads
+window.downloadReportById = function(resultId, type) {
+  authFetch(`${API}/api/reports/${type}/${resultId}`)
+    .then(res => res.blob())
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `report.${type === 'pdf' ? 'pdf' : 'json'}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    })
+    .catch(err => showToast(err.message, 'error'));
+};
 
+// ===== All Results (with authFetch) =====
 async function loadAllResults() {
   try {
-    const res = await fetch(`${API}/api/reports/all`);
+    const res = await authFetch(`${API}/api/reports/all`);
     const data = await res.json();
     allResultsData = data.results || [];
     renderResultsTable(allResultsData);
@@ -513,8 +669,8 @@ function renderResultsTable(results) {
             <td><span class="${r.passed ? 'pass-badge' : 'fail-badge'}">${r.passed ? 'PASS' : 'FAIL'}</span></td>
             <td style="font-size:0.78rem;color:var(--text3)">${new Date(r.gradedAt).toLocaleDateString()}</td>
             <td style="display:flex;gap:5px">
-              <a href="${API}/api/reports/pdf/${r.resultId}" target="_blank" class="btn btn-sm btn-ghost">PDF</a>
-              <a href="${API}/api/reports/json/${r.resultId}" target="_blank" class="btn btn-sm btn-ghost">JSON</a>
+              <a href="#" class="btn btn-sm btn-ghost" onclick="event.preventDefault(); downloadReportById('${r.resultId}', 'pdf')">PDF</a>
+              <a href="#" class="btn btn-sm btn-ghost" onclick="event.preventDefault(); downloadReportById('${r.resultId}', 'json')">JSON</a>
             </td>
           </tr>
         `).join('')}
@@ -531,7 +687,7 @@ function renderRecentResults(results) {
   }
   container.innerHTML = `
     <table>
-      <thead><tr><th>Student</th><th>Exam</th><th>Score</th><th>Grade</th><th>Status</th></tr></thead>
+      <thead><tr><th>Student</th><th>Exam</th><th>Score</th><th>Grade</th><th>Status</th> </tr></thead>
       <tbody>
         ${results.map(r => `
           <tr>

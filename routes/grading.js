@@ -4,10 +4,11 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
+const auth = require('../middleware/auth');
 
-// In-memory store for exam sessions and results
-const examStore = {};
-const resultStore = {};
+// In-memory store for exam sessions and results (now with userId)
+let examStore = {};    // examId -> { ...exam, userId }
+let resultStore = {};  // resultId -> { ...result, userId }
 
 // Multer setup for file uploads
 const storage = multer.diskStorage({
@@ -25,8 +26,8 @@ const upload = multer({
   }
 });
 
-// Create a new exam with answer key
-router.post('/create-exam', (req, res) => {
+// Create a new exam with answer key (protected)
+router.post('/create-exam', auth, (req, res) => {
   try {
     const { title, subject, totalMarks, passMark, answerKey, timeLimit } = req.body;
 
@@ -37,6 +38,7 @@ router.post('/create-exam', (req, res) => {
     const examId = uuidv4();
     const exam = {
       id: examId,
+      userId: req.user.id,          // <-- link to authenticated user
       title,
       subject: subject || 'General',
       totalMarks: totalMarks || answerKey.length,
@@ -60,22 +62,24 @@ router.post('/create-exam', (req, res) => {
   }
 });
 
-// Get all exams
-router.get('/exams', (req, res) => {
-  const exams = Object.values(examStore).map(e => ({
-    id: e.id,
-    title: e.title,
-    subject: e.subject,
-    totalQuestions: e.totalQuestions,
-    totalMarks: e.totalMarks,
-    passMark: e.passMark,
-    createdAt: e.createdAt
-  }));
+// Get all exams (only user's own exams)
+router.get('/exams', auth, (req, res) => {
+  const exams = Object.values(examStore)
+    .filter(e => e.userId === req.user.id)
+    .map(e => ({
+      id: e.id,
+      title: e.title,
+      subject: e.subject,
+      totalQuestions: e.totalQuestions,
+      totalMarks: e.totalMarks,
+      passMark: e.passMark,
+      createdAt: e.createdAt
+    }));
   res.json({ exams });
 });
 
-// Grade a student's answers (manual entry)
-router.post('/submit', (req, res) => {
+// Grade a student's answers (manual entry) – protected
+router.post('/submit', auth, (req, res) => {
   try {
     const { examId, studentName, studentId, answers } = req.body;
 
@@ -84,11 +88,13 @@ router.post('/submit', (req, res) => {
     }
 
     const exam = examStore[examId];
-    if (!exam) return res.status(404).json({ error: 'Exam not found' });
+    if (!exam || exam.userId !== req.user.id) {
+      return res.status(404).json({ error: 'Exam not found' });
+    }
 
     const result = gradeAnswers(exam, studentName, studentId || 'N/A', answers);
     const resultId = uuidv4();
-    resultStore[resultId] = result;
+    resultStore[resultId] = { ...result, userId: req.user.id }; // store with userId
 
     res.json({ success: true, resultId, result });
   } catch (err) {
@@ -96,8 +102,8 @@ router.post('/submit', (req, res) => {
   }
 });
 
-// Upload and grade answer sheet (CSV/JSON/TXT file)
-router.post('/upload', upload.single('answerSheet'), (req, res) => {
+// Upload and grade answer sheet (CSV/JSON/TXT file) – protected
+router.post('/upload', auth, upload.single('answerSheet'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -107,7 +113,9 @@ router.post('/upload', upload.single('answerSheet'), (req, res) => {
     }
 
     const exam = examStore[examId];
-    if (!exam) return res.status(404).json({ error: 'Exam not found' });
+    if (!exam || exam.userId !== req.user.id) {
+      return res.status(404).json({ error: 'Exam not found' });
+    }
 
     const filePath = req.file.path;
     const ext = path.extname(req.file.originalname).toLowerCase();
@@ -145,7 +153,7 @@ router.post('/upload', upload.single('answerSheet'), (req, res) => {
 
     const result = gradeAnswers(exam, studentName, studentId || 'N/A', answers);
     const resultId = uuidv4();
-    resultStore[resultId] = result;
+    resultStore[resultId] = { ...result, userId: req.user.id };
 
     res.json({ success: true, resultId, result });
   } catch (err) {
@@ -154,8 +162,8 @@ router.post('/upload', upload.single('answerSheet'), (req, res) => {
   }
 });
 
-// Bulk grade multiple students (JSON array)
-router.post('/bulk-grade', (req, res) => {
+// Bulk grade multiple students (JSON array) – protected
+router.post('/bulk-grade', auth, (req, res) => {
   try {
     const { examId, students } = req.body;
 
@@ -164,13 +172,15 @@ router.post('/bulk-grade', (req, res) => {
     }
 
     const exam = examStore[examId];
-    if (!exam) return res.status(404).json({ error: 'Exam not found' });
+    if (!exam || exam.userId !== req.user.id) {
+      return res.status(404).json({ error: 'Exam not found' });
+    }
 
     const results = [];
     for (const student of students) {
       const result = gradeAnswers(exam, student.name, student.id || 'N/A', student.answers);
       const resultId = uuidv4();
-      resultStore[resultId] = result;
+      resultStore[resultId] = { ...result, userId: req.user.id };
       results.push({ resultId, ...result });
     }
 
@@ -192,14 +202,16 @@ router.post('/bulk-grade', (req, res) => {
   }
 });
 
-// Get a specific result
-router.get('/result/:resultId', (req, res) => {
+// Get a specific result (only if it belongs to the user)
+router.get('/result/:resultId', auth, (req, res) => {
   const result = resultStore[req.params.resultId];
-  if (!result) return res.status(404).json({ error: 'Result not found' });
+  if (!result || result.userId !== req.user.id) {
+    return res.status(404).json({ error: 'Result not found' });
+  }
   res.json(result);
 });
 
-// Core grading function
+// Core grading function (unchanged except no store access)
 function gradeAnswers(exam, studentName, studentId, answers) {
   const answerKey = exam.answerKey;
   let correct = 0;
